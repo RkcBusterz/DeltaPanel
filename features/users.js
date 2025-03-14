@@ -8,15 +8,18 @@ const db = new sqlite3.Database("store.db", (err) => {
 
 db.run(`CREATE TABLE IF NOT EXISTS users (
     email TEXT PRIMARY KEY,
-    username TEXT NOT NULL,
+    username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     isAdmin INTEGER DEFAULT 0,
-    session_id TEXT
+    session_id TEXT UNIQUE
 )`);
 
+
 function hashPassword(password) {
+    if (!password) throw new Error("Password cannot be empty or undefined");
     return crypto.createHash("sha256").update(password).digest("hex");
 }
+
 
 function generateSessionId() {
     return crypto.randomBytes(32).toString("hex");
@@ -104,4 +107,54 @@ function listUsers() {
     });
 }
 
-module.exports = { addUser, resetPassword, removeUser, editUser, validateSession, listUsers };
+function getUserByEmail(email) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            "SELECT email, username, isAdmin FROM users WHERE email = ?",
+            [email],
+            (err, row) => {
+                if (err) reject("Failed to fetch user");
+                else resolve(row || null);
+            }
+        );
+    });
+}
+
+function getUserBySession(sessionId) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            "SELECT email, username, isAdmin FROM users WHERE session_id = ?",
+            [sessionId],
+            (err, row) => {
+                if (err) reject("Failed to fetch user by session");
+                else resolve(row || null);
+            }
+        );
+    });
+}
+
+function getUserByEmailAndPassword(email, password) {
+    return new Promise((resolve, reject) => {
+        const hashedPassword = hashPassword(password);
+        db.get(
+            "SELECT email, username, isAdmin,session_id FROM users WHERE email = ? AND password = ?",
+            [email, hashedPassword],
+            (err, row) => {
+                if (err) reject("Failed to fetch user with email and password");
+                else resolve(row || null);
+            }
+        );
+    });
+}
+
+module.exports = {
+    addUser,
+    resetPassword,
+    removeUser,
+    editUser,
+    validateSession,
+    listUsers,
+    getUserByEmail,
+    getUserBySession,
+    getUserByEmailAndPassword
+};
